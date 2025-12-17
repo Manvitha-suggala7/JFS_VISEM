@@ -24,6 +24,12 @@
         font-size: 20px;
         margin-top: 30px;
       }
+      .highlight-batch {
+        background-color: yellow;
+        font-weight: bold;
+        color: black;
+      }
+
     </style>
   </head>
 
@@ -102,9 +108,16 @@
           timetable[batch] ??= {};
           timetable[batch][day] ??= { FN: "", AN: "" };
 
-          timetable[batch][day][
-            session
-          ] = `${course}<br>Room: ${room}<br>Faculty: ${faculty}`;
+          const isSUB2 = batch.trim() === "VI-SU-B2";
+
+timetable[batch][day][session] = `
+  <div class="${isSUB2 ? "highlight-batch" : ""}">
+    ${course}<br>
+    Room: ${room}<br>
+    Faculty: ${faculty}
+  </div>
+`;
+
         });
 
         buildBatchTables(timetable);
@@ -152,9 +165,15 @@
 
         originalData.forEach((row) => {
           if (row["FACULTY"]?.trim() === faculty) {
-            timetable[row["DAY"]][row["SESSION"]].push(
-              `${row["BATCH"]} (${row["COURSE"]})`
-            );
+            const batchName = row["BATCH"].trim();
+const isSUB2 = batchName === "VI-SU-B2";
+
+timetable[row["DAY"]][row["SESSION"]].push(
+  `<span class="${isSUB2 ? "highlight-batch" : ""}">
+    ${batchName} (${row["COURSE"]})
+  </span>`
+);
+
           }
         });
 
