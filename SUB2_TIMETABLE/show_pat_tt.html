@@ -1,217 +1,223 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <title>Timetable Viewer</title>
+<head>
+    <title>Faculty & Batch Timetable</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 
     <style>
-      table {
-        width: 80%;
-        border-collapse: collapse;
-        margin: 20px 0;
-      }
-      th,
-      td {
-        border: 1px solid black;
-        padding: 8px;
-        text-align: center;
-      }
-      th {
-        background: lightblue;
-      }
-      .batch-title {
-        font-weight: bold;
-        font-size: 20px;
-        margin-top: 30px;
-      }
-      .highlight-batch {
-        background-color: yellow;
-        font-weight: bold;
-        color: black;
-      }
-
+        table {
+            width: 80%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        th, td {
+            border: 1px solid black;
+            padding: 8px;
+            text-align: center;
+            vertical-align: top;
+        }
+        th {
+            background: lightblue;
+        }
+        .title {
+            font-weight: bold;
+            font-size: 20px;
+            margin-top: 30px;
+        }
+        select, button {
+            padding: 5px 10px;
+            margin: 10px 0;
+            font-size: 14px;
+        }
+        .highlight {
+            background-color: yellow;
+            font-weight: bold;
+        }
+        hr {
+            border: 1px dashed #aaa;
+        }
     </style>
-  </head>
+</head>
 
-  <body>
-    <h2>Upload CSV File</h2>
-    <input type="file" id="csvFile" accept=".csv" />
+<body>
 
-    <h3>Faculty-wise Timetable (Optional)</h3>
-    <select id="facultySelect">
-      <option value="">-- All Batches (Default) --</option>
-    </select>
-    <button onclick="handleView()">View</button>
+<h2>Upload CSV File</h2>
+<input type="file" id="csvFile" accept=".csv"><br>
 
-    <div id="tables"></div>
+<label>Select View:</label>
+<select id="viewSelect" disabled>
+    <option value="">--Select--</option>
+</select>
 
-    <script>
-      let originalData = [];
+<div id="tables"></div>
 
-      document
-        .getElementById("csvFile")
-        .addEventListener("change", function () {
-          Papa.parse(this.files[0], {
-            header: true,
-            skipEmptyLines: true,
-            complete: function (result) {
-              originalData = result.data;
-              populateFacultyDropdown(result.data);
-              processBatchWise(result.data); // default view
-            },
-          });
-        });
+<script>
+let facultyTT = {};
+let batchTT = {};
 
-      function populateFacultyDropdown(data) {
-        const facultySet = new Set();
-        const select = document.getElementById("facultySelect");
-        select.innerHTML = `<option value="">-- All Batches (Default) --</option>`;
-
-        data.forEach((row) => {
-          if (row["FACULTY"]) {
-            facultySet.add(row["FACULTY"].trim());
-          }
-        });
-
-        facultySet.forEach((faculty) => {
-          const option = document.createElement("option");
-          option.value = faculty;
-          option.textContent = faculty;
-          select.appendChild(option);
-        });
-      }
-
-      function handleView() {
-        const faculty = document.getElementById("facultySelect").value;
-        if (faculty === "") {
-          processBatchWise(originalData); // original behavior
-        } else {
-          showFacultyTimetable(faculty);
+/* ---------- LOAD CSV ---------- */
+document.getElementById("csvFile").addEventListener("change", function () {
+    Papa.parse(this.files[0], {
+        header: true,
+        skipEmptyLines: true,
+        complete: function (result) {
+            processCSV(result.data);
+            populateDropdown();
         }
-      }
+    });
+});
 
-      /* -------------------- BATCH-WISE (ORIGINAL) -------------------- */
+/* ---------- PROCESS CSV ---------- */
+function processCSV(data) {
+    facultyTT = {};
+    batchTT = {};
 
-      function processBatchWise(data) {
-        const timetable = {};
+    data.forEach(row => {
+        const faculty = row["FACULTY"];
+        const batch = row["BATCH"];
+        const day = row["DAY"];
+        const sessionRaw = row["SESSION"];
+        const course = row["COURSE"];
+        const room = row["ROOM"];
 
-        data.forEach((row) => {
-          const batch = row["BATCH"];
-          const day = row["DAY"];
-          const session = row["SESSION"];
-          const course = row["COURSE"];
-          const room = row["ROOM"];
-          const faculty = row["FACULTY"];
+        if (!day || !sessionRaw) return;
 
-          if (!batch || !day || !session) return;
+        const session =
+            sessionRaw.toString().toUpperCase() === "FN" || sessionRaw == 1 ? "FN" :
+            sessionRaw.toString().toUpperCase() === "AN" || sessionRaw == 2 ? "AN" : null;
+        if (!session) return;
 
-          timetable[batch] ??= {};
-          timetable[batch][day] ??= { FN: "", AN: "" };
-
-          const isSUB2 = batch.trim() === "VI-SU-B2";
-
-timetable[batch][day][session] = `
-  <div class="${isSUB2 ? "highlight-batch" : ""}">
-    ${course}<br>
-    Room: ${room}<br>
-    Faculty: ${faculty}
-  </div>
-`;
-
-        });
-
-        buildBatchTables(timetable);
-      }
-
-      function buildBatchTables(timetable) {
-        const container = document.getElementById("tables");
-        container.innerHTML = "";
-
-        const days = ["MON", "TUE", "WED", "THU", "FRI", "SAT"];
-
-        for (const batch in timetable) {
-          const title = document.createElement("div");
-          title.className = "batch-title";
-          title.innerText = `Batch: ${batch}`;
-
-          const table = document.createElement("table");
-
-          let html =
-            "<tr><th>DAY</th><th>FN</th><th rowspan=7>L<br>U<br>N<br>C<br>H</th><th>AN</th></tr>";
-
-          days.forEach((day) => {
-            html += `
-              <tr>
-                <td>${day}</td>
-                <td>${timetable[batch][day]?.FN || ""}</td>
-                <td>${timetable[batch][day]?.AN || ""}</td>
-              </tr>
-            `;
-          });
-
-          table.innerHTML = html;
-          container.appendChild(title);
-          container.appendChild(table);
+        /* FACULTY TIMETABLE */
+        if (faculty) {
+            facultyTT[faculty] ??= {};
+            facultyTT[faculty][day] ??= { FN: "", AN: "" };
+            facultyTT[faculty][day][session] =
+                `${course} | Room: ${room} | Batch: ${batch}`;
         }
-      }
 
-      /* -------------------- FACULTY-WISE (SINGLE TABLE) -------------------- */
-      
+        /* BATCH TIMETABLE */
+        if (batch) {
+            batchTT[batch] ??= {};
+            batchTT[batch][day] ??= { FN: "", AN: "" };
+            batchTT[batch][day][session] =
+                `${course} | Room: ${room} | Faculty: ${faculty}`;
+        }
+    });
+}
 
-      function showFacultyTimetable(faculty) {
-        const days = ["MON", "TUE", "WED", "THU", "FRI", "SAT"];
-        const timetable = {};
-        days.forEach((d) => (timetable[d] = { FN: [], AN: [] }));
+/* ---------- DROPDOWN ---------- */
+function populateDropdown() {
+    const select = document.getElementById("viewSelect");
+    select.innerHTML = `
+        <option value="">--Select--</option>
+        <option value="ALL_FACULTIES">ALL FACULTIES</option>
+        <option value="ALL_BATCHES">ALL BATCHES</option>
+    `;
 
-        originalData.forEach((row) => {
-          if (row["FACULTY"]?.trim() === faculty) {
-            const batchName = row["BATCH"].trim();
-const isSUB2 = batchName === "VI-SU-B2";
+    Object.keys(facultyTT).forEach(f => {
+        const opt = document.createElement("option");
+        opt.value = `FAC_${f}`;
+        opt.textContent = `Faculty: ${f}`;
+        select.appendChild(opt);
+    });
 
-timetable[row["DAY"]][row["SESSION"]].push(
-  `<span class="${isSUB2 ? "highlight-batch" : ""}">
-    ${batchName} (${row["COURSE"]})
-  </span>`
-);
+    select.disabled = false;
+    select.onchange = handleView;
+}
 
-          }
-        });
+/* ---------- VIEW HANDLER ---------- */
+function handleView() {
+    const value = this.value;
+    const container = document.getElementById("tables");
+    container.innerHTML = "";
 
-        buildFacultyTable(faculty, timetable);
-      }
+    if (value === "ALL_FACULTIES") {
+        Object.keys(facultyTT).forEach(f => showFacultyTable(f, true));
+    }
+    else if (value === "ALL_BATCHES") {
+        Object.keys(batchTT).forEach(b => showBatchTable(b, true));
+    }
+    else if (value.startsWith("FAC_")) {
+        showFacultyTable(value.replace("FAC_", ""), false);
+    }
+}
 
-      function buildFacultyTable(faculty, timetable) {
-        const container = document.getElementById("tables");
-        container.innerHTML = "";
+/* ---------- FACULTY TABLE ---------- */
+function showFacultyTable(faculty, append) {
+    const container = document.getElementById("tables");
+    if (!append) container.innerHTML = "";
 
-        const title = document.createElement("h3");
-        title.innerText = `Faculty Timetable: ${faculty}`;
+    const days = ["MON","TUE","WED","THU","FRI","SAT"];
 
-        const table = document.createElement("table");
+    const title = document.createElement("div");
+    title.className = "title";
+    title.textContent = `Faculty: ${faculty}`;
 
-        let html = `
-          <tr>
+    const table = document.createElement("table");
+    let html = `
+        <tr>
             <th>DAY</th>
             <th>FN</th>
             <th rowspan="7">L<br>U<br>N<br>C<br>H</th>
             <th>AN</th>
-          </tr>
-        `;
+        </tr>
+    `;
 
-        for (const day in timetable) {
-          html += `
+    days.forEach(d => {
+        const fn = facultyTT[faculty][d]?.FN || "";
+        const an = facultyTT[faculty][d]?.AN || "";
+        html += `
             <tr>
-              <td>${day}</td>
-              <td>${timetable[day].FN.join("<br>")}</td>
-              <td>${timetable[day].AN.join("<br>")}</td>
+                <td>${d}</td>
+                <td class="${fn.includes("VI-SU-B2") ? "highlight" : ""}">${fn}</td>
+                <td class="${an.includes("VI-SU-B2") ? "highlight" : ""}">${an}</td>
             </tr>
-          `;
-        }
+        `;
+    });
 
-        table.innerHTML = html;
-        container.appendChild(title);
-        container.appendChild(table);
-      }
-    </script>
-  </body>
+    table.innerHTML = html;
+    container.appendChild(title);
+    container.appendChild(table);
+}
+
+/* ---------- BATCH TABLE ---------- */
+function showBatchTable(batch, append) {
+    const container = document.getElementById("tables");
+    if (!append) container.innerHTML = "";
+
+    const days = ["MON","TUE","WED","THU","FRI","SAT"];
+
+    const title = document.createElement("div");
+    title.className = "title";
+    title.textContent = `Batch: ${batch}`;
+
+    const table = document.createElement("table");
+    let html = `
+        <tr>
+            <th>DAY</th>
+            <th>FN</th>
+            <th rowspan="7">L<br>U<br>N<br>C<br>H</th>
+            <th>AN</th>
+        </tr>
+    `;
+
+    days.forEach(d => {
+        const fn = batchTT[batch][d]?.FN || "";
+        const an = batchTT[batch][d]?.AN || "";
+        html += `
+            <tr>
+                <td>${d}</td>
+                <td class="${fn.includes("VI-SU-B2") ? "highlight" : ""}">${fn}</td>
+                <td class="${an.includes("VI-SU-B2") ? "highlight" : ""}">${an}</td>
+            </tr>
+        `;
+    });
+
+    table.innerHTML = html;
+    container.appendChild(title);
+    container.appendChild(table);
+}
+</script>
+
+</body>
 </html>
